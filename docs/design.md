@@ -173,7 +173,26 @@ flowchart LR
     S -->|drift and pipeline alerts| E
 ```
 
-### Diagram 2: Data flow on the seven layers
+#### Diagram 1 (iteration 2): System context
+
+```mermaid
+flowchart LR
+  K[Kaggle all_data.csv] -->|scripts/sample_data.py| R[data/raw/*.parquet]
+  R -->|dvc add / push| M[(MinIO: bucket dvc)]
+  subgraph AF[Airflow DAG toxicity_etl, batch = data interval, never now]
+    E[extract] --> V[validate] --> T[transform] --> L[load] --> B[build_features] --> Q[[quality_check]]
+  end
+  R --> E
+  L -->|DELETE + INSERT per batch_month| PG[(PostgreSQL warehouse: dwh, features<br/>PostgreSQL feature table; Feast planned)]
+  B --> PG
+  PG --> TR[train.py: rule vs TF-IDF+LogReg]
+  TR -->|params, metrics, data_version, git_commit| ML[MLflow tracking server]
+  ML --- PGM[(PostgreSQL: mlflow)]
+  ML --- MA[(MinIO: bucket mlflow)]
+  ML --> REG[Model registry, alias champion] -->|load by alias, Lab 4| SRV[Serving]
+```
+
+#### Diagram 2: Data flow on the seven layers
 
 ```mermaid
 flowchart TB
@@ -342,9 +361,17 @@ Largest item: MWAA
 | External moderation API (for example a hosted toxicity service) instead of our own model | No training work; fast to start              | No control over versions or data; cost per call; cannot adapt to our data; no drift story            | The goal of the course is to build and operate the full ML system.                                                                       |
 | Other dataset (Twitter hate-speech sets)                                                 | Social-media style text                      | Usually no reliable timestamps and a small size                                                      | This one has dates and about 2M rows, so a time split is possible.                                                                       |
 
-### 7.2 і 7.3
+### 7.2 Experiment results (MLflow, experiment toxicity-baseline)
 
-placeholders for labs 2-3
+| Run                           | Kind  | PR-AUC (val) | recall@p≥0.5 (val) | Run id | Registered                           |
+| ----------------------------- | ----- | ------------ | ------------------ | ------ | ------------------------------------ |
+| rule-badwords                 | rule  | <<>>         | <<>>               | <<>>   | no                                   |
+| tfidf-lr                      | model | <<>>         | <<>>               | <<>>   | toxicity-tfidf-lr v1, alias champion |
+| tfidf-lr RANDOM SPLIT (leaky) | model | <<>>         | <<>>               | <<>>   | never                                |
+
+### 7.3
+
+placeholder for lab 3
 
 ### 7.4 Milestones
 
