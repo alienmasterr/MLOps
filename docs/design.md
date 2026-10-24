@@ -363,11 +363,11 @@ Largest item: MWAA
 
 ### 7.2 Experiment results (MLflow, experiment toxicity-baseline)
 
-| Run                           | Kind  | PR-AUC (val) | recall@p≥0.5 (val) | Run id | Registered                           |
-| ----------------------------- | ----- | ------------ | ------------------ | ------ | ------------------------------------ |
-| rule-badwords                 | rule  | <<>>         | <<>>               | <<>>   | no                                   |
-| tfidf-lr                      | model | <<>>         | <<>>               | <<>>   | toxicity-tfidf-lr v1, alias champion |
-| tfidf-lr RANDOM SPLIT (leaky) | model | <<>>         | <<>>               | <<>>   | never                                |
+| Run                           | Kind  | PR-AUC | recall@p≥0.5 | Run id                           | Registered                           |
+| ----------------------------- | ----- | ------ | ------------ | -------------------------------- | ------------------------------------ | --- |
+| rule-badwords                 | rule  | 0.2853 | 0.1098       | 84ce613f86994dd8b840464b8d40d3dd | no                                   |
+| tfidf-lr                      | model | 0.6561 | 0.7172       | 634c9446af784343b4b73788bff7f11e | toxicity-tfidf-lr v1, alias champion |
+| tfidf-lr RANDOM SPLIT (leaky) | model | 0.6512 | 0.6979       | 25ad3577cf704e5881196a72e7ba193d | never                                |     |
 
 ### 7.3
 
