@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+.env
+.dvc/config.local
+data/interim/
+data/broken/
+reports/
