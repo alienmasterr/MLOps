@@ -199,11 +199,11 @@ flowchart TB
     subgraph L1["1 Data ingestion"]
         ING["Airflow DAG: read daily batch from MinIO landing bucket (batch, no stream)"]
     end
-    VP(("VERSION POINT<br/>DVC tag on raw data"))
+    VP((VERSION POINT<br/>DVC tag on raw data))
     subgraph L2["2 Preprocessing and transformation"]
-        PRE["pandas: parse dates, drop duplicates, label = toxicity >= 0.5"]
+        PRE["pandas: parse dates, drop duplicates, label = toxicity &gt;= 0.5"]
     end
-    QG(("QUALITY GATE<br/>schema, null and range checks; bad batch fails the run"))
+    QG((QUALITY GATE<br/>schema, null and range checks, bad batch fails the run))
     subgraph L3["3 Feature store (Feast)"]
         OFF["OFFLINE store: Parquet in MinIO"]
         ON["ONLINE store: PostgreSQL"]
@@ -212,7 +212,7 @@ flowchart TB
         TRN["Airflow task: TF-IDF + Logistic Regression, time split, evaluation"]
     end
     subgraph L5["5 Registry and deployment"]
-        REG["MLflow registry; promotion by human approval, alias champion"]
+        REG["MLflow registry: promotion by human approval, alias champion"]
     end
     subgraph L6["6 Inference"]
         RT["real-time: model service (FastAPI) on Minikube"]
@@ -220,7 +220,7 @@ flowchart TB
     end
     CON["Consumer: platform moderation backend and review queue"]
     subgraph L7["7 Monitoring and retraining loop"]
-        MON["Evidently reports, Prometheus and Grafana; drift or metric drop triggers retraining; alert to ML engineer"]
+        MON["Evidently reports, Prometheus and Grafana. Drift or metric drop triggers retraining, alert to ML engineer"]
     end
 
     ING --> VP --> PRE --> QG --> OFF
