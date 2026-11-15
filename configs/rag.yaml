@@ -16,7 +16,7 @@ retrieval:
 llm:
   hosting: api
   base_url: https://api.groq.com/openai/v1
-  model: meta-llama/llama-prompt-guard-2-22m
+  model: qwen/qwen3.8-27b
   api_key_env: LLM_API_KEY
   temperature: 0.0
   max_tokens: 200
@@ -26,7 +26,7 @@ llm:
 judge:
   hosting: api
   base_url: https://api.groq.com/openai/v1
-  model: meta-llama/llama-prompt-guard-2-22m
+  model: qwen/qwen3.8-27b
   api_key_env: JUDGE_API_KEY
   temperature: 0.0
   max_tokens: 400
