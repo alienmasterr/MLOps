@@ -1,113 +1,84 @@
 from __future__ import annotations
 
+import argparse
 import os
-import re
-import time
-from functools import lru_cache
-from pathlib import Path
 
-import numpy as np
-from openai import APIStatusError, OpenAI, RateLimitError
+import mlflow
+from mlflow import sklearn as mlflow_sklearn
 
-_LAST_CALL_TS = 0.0
-
-
-@lru_cache(maxsize=None)
-def _client(base_url: str, key_env: str) -> OpenAI:
-    api_key = os.environ.get(key_env)
-    if not api_key:
-        raise RuntimeError(f"Environment variable {key_env} is not set")
-    return OpenAI(base_url=base_url, api_key=api_key)
+from mlops import core
+from mlops.rag.config import load
+from mlops.rag.llm_client import Meter, chat, parse_score, render
+from mlops.rag.retrieve import assert_index_current, retrieve
+from mlops.rag.runlog import lineage_tags, log_config
+from mlops.rules import rule_score
+from mlops.train import CAT, MODEL_NAME, NUM, VAL, load_frame, metrics
 
 
-def render(prompt_path: str, **kw) -> str:
-    text = Path(prompt_path).read_text(encoding="utf-8")
-    for k, v in kw.items():
-        text = text.replace("{{" + k + "}}", str(v))
-    return text
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--retrieval", action="store_true")
+    ap.add_argument("--override", action="append", default=[])
+    ap.add_argument("--allow-dirty", action="store_true")
+    a = ap.parse_args()
+
+    cfg = load(a.override)
+    tags = lineage_tags(cfg, a.allow_dirty)
+    engine = core.get_engine()
+    if a.retrieval:
+        assert_index_current(engine, cfg)
+
+    val = load_frame(engine, *VAL)
+    s = val.sample(n=min(cfg["eval"]["classify_n"], len(val)),
+                   random_state=cfg["eval"]["seed"]).reset_index(drop=True)
+    y = s["is_toxic"].astype(int)
+
+    template = cfg["prompts"]["classify_rag" if a.retrieval else "classify"]
+    meter, scores, fails = Meter(), [], 0
+    for i, comment in enumerate(s["comment_text"]):
+        ctx = ""
+        if a.retrieval:
+            ctx = "\n\n".join(f"[{h['doc_id']}] {h['text']}"
+                              for h in retrieve(engine, cfg, comment[:500]))
+        r = chat(cfg["llm"], render(template, comment=comment[:1500], context=ctx))
+        meter.add(r)
+        sc = parse_score(r["text"], "toxicity_score")
+        if sc is None:
+            fails, sc = fails + 1, 0.0
+        scores.append(min(max(sc, 0.0), 1.0))
+        if (i + 1) % 50 == 0:
+            print(f"{i + 1}/{len(s)} done", flush=True)
+
+    m_llm = metrics(y, scores)
+    m_rule = metrics(y, s["comment_text"].map(rule_score).to_numpy())
+    champ = mlflow_sklearn.load_model(f"models:/{MODEL_NAME}@champion")
+    m_champ = metrics(y, champ.predict_proba(s[NUM + CAT + ["comment_text"]])[:, 1])
+
+    mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
+    mlflow.set_experiment("llm-rag")
+    name = f"llm-{'rag' if a.retrieval else 'zeroshot'}-{cfg['llm']['model'].split('/')[-1]}"
+    with mlflow.start_run(run_name=name) as run:
+        mlflow.set_tags({**tags, "kind": "llm_classifier", "retrieval": str(a.retrieval)})
+        log_config(cfg)
+        mlflow.log_params({"n_eval": len(s), "split": "validation 2017-04..05 (sample)"})
+        mlflow.log_metrics({
+            "val_pr_auc": m_llm["pr_auc"],
+            "val_recall_at_p50": m_llm["recall_at_p50"],
+            "same_sample_rule_pr_auc": m_rule["pr_auc"],
+            "same_sample_rule_recall_at_p50": m_rule["recall_at_p50"],
+            "same_sample_champion_pr_auc": m_champ["pr_auc"],
+            "same_sample_champion_recall_at_p50": m_champ["recall_at_p50"],
+            "parse_failures": fails,
+            **meter.summary(cfg["llm"], "llm"),
+        })
+
+    print("\n| (same sample) | PR-AUC | recall@precision>=0.50 |\n|---|---|---|")
+    print(f"| rule | {m_rule['pr_auc']:.4f} | {m_rule['recall_at_p50']:.4f} |")
+    print(f"| TF-IDF+LogReg (champion) | {m_champ['pr_auc']:.4f} | {m_champ['recall_at_p50']:.4f} |")
+    print(f"| LLM {name} | {m_llm['pr_auc']:.4f} | {m_llm['recall_at_p50']:.4f} |")
+    print(f"parse failures: {fails}/{len(s)}")
+    print("run id:", run.info.run_id)
 
 
-def _retry_delay(err: Exception, attempt: int) -> float:
-    m = re.search(r"retry in (\d+(?:\.\d+)?)s", str(err), re.I)
-    if m:
-        return float(m.group(1)) + 1.5
-    return min(15.0 * (attempt + 1), 65.0)
-
-
-def chat(section: dict, prompt: str, max_retries: int = 8) -> dict:
-    """section = cfg['llm'] або cfg['judge']."""
-    global _LAST_CALL_TS
-    c = _client(section["base_url"], section["api_key_env"])
-
-    kwargs = {
-        "model": section["model"],
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": section["temperature"],
-        "max_tokens": max(section["max_tokens"], 1024),
-    }
-    if "gemini" in section["model"].lower():
-        kwargs["reasoning_effort"] = "low"
-
-    # На безкоштовному тарифі (price == 0) тримаємо темп <= 15 RPM (~1 запит / 4.1 с)
-    min_interval = 4.1 if section.get("price_per_1m_input_usd", 0) == 0 else 0.0
-
-    for attempt in range(max_retries):
-        if min_interval > 0:
-            wait = min_interval - (time.perf_counter() - _LAST_CALL_TS)
-            if wait > 0:
-                time.sleep(wait)
-        try:
-            t0 = time.perf_counter()
-            r = c.chat.completions.create(**kwargs)
-            dt = time.perf_counter() - t0
-            _LAST_CALL_TS = time.perf_counter()
-            u = r.usage
-            return {
-                "text": r.choices[0].message.content or "",
-                "latency": dt,
-                "tin": u.prompt_tokens if u else 0,
-                "tout": u.completion_tokens if u else 0,
-            }
-        except (RateLimitError, APIStatusError) as e:
-            _LAST_CALL_TS = time.perf_counter()
-            if isinstance(e, APIStatusError) and e.status_code not in (429, 500, 503):
-                raise
-            if attempt == max_retries - 1:
-                raise
-            delay = _retry_delay(e, attempt)
-            print(f"[rate-limit] waiting {delay:.1f}s before retry {attempt + 1}/{max_retries}...")
-            time.sleep(delay)
-
-    raise RuntimeError("Failed to get response from LLM API")
-
-
-def parse_score(text: str, key: str) -> float | None:
-    m = re.search(rf'"{key}"\s*:\s*([0-9]*\.?[0-9]+)', text)
-    return float(m.group(1)) if m else None
-
-
-class Meter:
-    def __init__(self) -> None:
-        self.lat: list[float] = []
-        self.tin = 0
-        self.tout = 0
-
-    def add(self, r: dict) -> None:
-        self.lat.append(r["latency"])
-        self.tin += r["tin"]
-        self.tout += r["tout"]
-
-    def summary(self, section: dict, prefix: str) -> dict:
-        p50, p95 = np.percentile(self.lat, [50, 95])
-        cost = (self.tin / 1e6) * section["price_per_1m_input_usd"] + \
-               (self.tout / 1e6) * section["price_per_1m_output_usd"]
-        return {
-            f"{prefix}_calls": len(self.lat),
-            f"{prefix}_tokens_in": self.tin,
-            f"{prefix}_tokens_out": self.tout,
-            f"{prefix}_cost_usd": cost,
-            f"{prefix}_latency_p50_s": float(p50),
-            f"{prefix}_latency_p95_s": float(p95),
-            f"{prefix}_latency_first_call_s": self.lat[0],
-            f"{prefix}_compute_seconds": float(sum(self.lat)),
-        }
+if __name__ == "__main__":
+    main()

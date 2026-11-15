@@ -94,8 +94,7 @@ A classifier with thresholds is simpler to evaluate, monitor and explain.
 - Index: pgvector inside Postgres database.
 
 **LLM component.** The LLM scores the same label as the Lab 2 model (comment toxicity), zero-shot and with retrieved moderation
-guidelines. Its metric is the Lab 2 metric, so rule, TF-IDF+LogReg and LLM are comparable. Corpus: 32 synthetic guideline
-documents (corpus/, public, LLM-written and hand-reviewed), <<N>> chunks.
+guidelines. Its metric is the Lab 2 metric, so rule, TF-IDF+LogReg and LLM are comparable. Corpus: 16 synthetic guideline documents (`corpus/`, public, LLM-written and hand-reviewed), 32 chunks.
 
 ### 5.2 Data
 
@@ -405,6 +404,12 @@ use local LLMs instead of API: rejected because of local LLMs taking local memor
 | rule-badwords                 | rule  | 0.2853 | 0.1098       | 84ce613f86994dd8b840464b8d40d3dd | no                                   |
 | tfidf-lr                      | model | 0.6561 | 0.7172       | 634c9446af784343b4b73788bff7f11e | toxicity-tfidf-lr v1, alias champion |
 | tfidf-lr RANDOM SPLIT (leaky) | model | 0.6512 | 0.6979       | 25ad3577cf704e5881196a72e7ba193d | never                                |     |
+
+| chunk size (words)                  | hit rate@3 | MRR   | answer score | run id    |
+| ----------------------------------- | ---------- | ----- | ------------ | --------- |
+| 60                                  | 0.905      | 0.861 | 0.643        | 471eed08… |
+| 120 (chosen, in `configs/rag.yaml`) | 1.000      | 0.937 | 0.929        | 464cda41… |
+| 240                                 | 0.952      | 0.837 | 0.905        | e90090c9… |
 
 ### 7.3
 
