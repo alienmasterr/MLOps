@@ -1,0 +1,45 @@
+corpus:
+  dir: corpus
+  glob: "*.md"
+
+chunking:
+  size_words: 120
+  overlap_words: 20
+
+embedding:
+  model: sentence-transformers/all-MiniLM-L6-v2
+
+retrieval:
+  top_k: 3
+
+# модель, яка відповідає / класифікує
+llm:
+  hosting: api
+  base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+  model: gemini-3.5-flash-lite
+  api_key_env: LLM_API_KEY
+  temperature: 0.0
+  max_tokens: 200
+  price_per_1m_input_usd: 0.0
+  price_per_1m_output_usd: 0.0
+
+judge:
+  hosting: api
+  base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+  model: gemini-3.8-flash
+  api_key_env: JUDGE_API_KEY
+  temperature: 0.0
+  max_tokens: 400
+  price_per_1m_input_usd: 0.0
+  price_per_1m_output_usd: 0.0
+
+prompts:
+  classify: prompts/classify_v1.txt
+  classify_rag: prompts/classify_rag_v1.txt
+  answer: prompts/rag_answer_v1.txt
+  judge: prompts/judge_v1.txt
+
+eval:
+  questions: eval/questions.jsonl
+  classify_n: 600        # скільки коментарів з validation оцінює LLM
+  seed: 42

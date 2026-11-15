@@ -1,0 +1,11 @@
+You grade a candidate answer against a reference answer.
+
+Question: {{question}}
+Reference answer: {{reference}}
+Candidate answer: {{answer}}
+
+Score 2: same meaning as the reference, no wrong claims.
+Score 1: partially correct or misses a key point.
+Score 0: wrong, contradicts the reference, or says the topic is not covered.
+
+Respond with only a JSON object: {"score": 0 or 1 or 2}

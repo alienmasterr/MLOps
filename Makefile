@@ -61,3 +61,37 @@ leaky:
 	PYTHONPATH=src $(PY) -m mlops.train --leaky-demo
 reproduce:
 	PYTHONPATH=src $(PY) -m mlops.reproduce --model-version $(MODEL_VERSION) --tol 0.005
+
+
+LLM_MODEL ?= Qwen/Qwen2.5-0.5B-Instruct
+RAGPY     = PYTHONPATH=src $(PY)
+
+.PHONY: llm-up llm-down rag-corpus rag-questions rag-check rag-index \
+        llm-zeroshot llm-rag rag-eval rag-sweep-chunk rag-sweep-topk
+
+llm-up:
+	docker run -d --rm --name vllm -p 8000:8000 --shm-size=1g \
+	  -v $(HOME)/.cache/huggingface:/root/.cache/huggingface \
+	  vllm-cpu-env --model $(LLM_MODEL)
+llm-down:
+	docker stop vllm
+
+rag-corpus:     ; $(RAGPY) scripts/gen_corpus.py
+rag-questions:  ; $(RAGPY) scripts/gen_eval_questions.py
+rag-check:      ; $(RAGPY) -m mlops.rag.eval_rag --check-only
+rag-index:      ; $(RAGPY) -m mlops.rag.ingest
+
+llm-zeroshot:   ; $(RAGPY) -m mlops.rag.classify_llm
+llm-rag:        ; $(RAGPY) -m mlops.rag.classify_llm --retrieval
+rag-eval:       ; $(RAGPY) -m mlops.rag.eval_rag
+
+rag-sweep-chunk:
+	for s in 60 120 240; do \
+	  $(RAGPY) -m mlops.rag.ingest --override chunking.size_words=$$s && \
+	  $(RAGPY) -m mlops.rag.eval_rag --override chunking.size_words=$$s --run-name chunk-$$s || exit 1; \
+	done
+	$(RAGPY) -m mlops.rag.ingest        # повернути індекс до значень з configs/rag.yaml
+rag-sweep-topk:
+	for k in 1 3 5; do \
+	  $(RAGPY) -m mlops.rag.eval_rag --override retrieval.top_k=$$k --run-name topk-$$k || exit 1; \
+	done
