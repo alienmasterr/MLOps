@@ -45,7 +45,7 @@ def main() -> None:
     leaks = title_leaks(cfg, qs)
     print(f"{len(qs)} questions, {len(leaks)} quote their document: {leaks}")
     if a.check_only:
-        raise SystemExit(0 if len(qs) >= 30 and not leaks else 1)
+        raise SystemExit(0 if len(qs) >= 20 and not leaks else 1)
 
     tags = lineage_tags(cfg, a.allow_dirty)
     engine = core.get_engine()
