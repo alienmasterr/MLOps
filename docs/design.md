@@ -166,6 +166,8 @@ The last feature has different training and serving sources, so it is the place 
 - Comparing a new model with the current one: both are evaluated on the same newest hold-out. The new model is promoted only if: PR-AUC is at least 0.01 higher; recall at precision 0.50 is not lower; the false-positive rate for identity-mention comments does not grow by more than 10% relative; p95 latency stays ≤ 200 ms.
 - What should catch "offline gets better, business gets worse": the identity-group check and the review-queue-share check, plus using the newest months as hold-out, so the model is tested on data close to what it will see.
 
+LLM classification is evaluated on a 20-comment sample (API quota limit), so it validates the pipeline and lineage, not model quality.
+
 ### 5.5 Human in the loop
 
 - Drift alert: goes to the ML engineer, who checks the Evidently report and decides if retraining is needed.
@@ -312,10 +314,12 @@ Cloud provider chosen for the estimate: AWS
   - Batch for the daily data load, nightly re-scoring and monitoring reports, because these are not time-critical and are cheaper and simpler to run as jobs.
 - Features are cheap to compute; only one feature (publication_toxic_rate_7d) is read from the online store.
 
-Inference: <<local vLLM Qwen2.5-0.5B-Instruct, CPU in Docker, no quantization, MacBook Air / API model X>>. Measured: p50 <<>> s,
-p95 <<>> s, <<tokens in/out>> per request, cost <<$ per 1000 requests or CPU-seconds>>. Trade-off: local = no money and the corpus
-stays on the machine but slower and weaker; API = faster and stronger but costs money and sends comments out. Chosen: <<...>>,
-accepted cost: <<...>>.
+Inference: hosted API (free tier), model `qwen3.8-27b`, no self-hosting (the local vLLM image could not be built on a laptop with limited
+disk and memory). Measured over 20 calls of the retrieval classifier: p50 0.21 s, p95 4.21 s, first call 0.67 s, ~508 input and ~13 output
+tokens per call, cost 0 USD on the free tier; throughput is limited by the provider's per-minute and per-day quotas, which also caps the
+evaluation sample at 20 comments. Trade-off: the API costs no money here and needs no GPU, but sends comments (a public dataset) to a
+third party, has no SLA, and a quota that decides how large an evaluation can be; a self-hosted 0.5-1.5B model would keep data local at
+the price of weaker quality and ~7 GB of memory. Chosen: API; accepted cost: quota limits and dependence on the provider.
 
 ### 6.4 Security
 
@@ -397,6 +401,8 @@ Largest item: MWAA
 
 use local LLMs instead of API: rejected because of local LLMs taking local memory resource
 
+A larger LLM evaluation sample was rejected for now: free-tier request limits; the rerun is a one-line config change.
+
 ### 7.2 Experiment results (MLflow, experiment toxicity-baseline)
 
 | Run                           | Kind  | PR-AUC | recall@p≥0.5 | Run id                           | Registered                           |
@@ -410,6 +416,9 @@ use local LLMs instead of API: rejected because of local LLMs taking local memor
 | 60                                  | 0.905      | 0.861 | 0.643        | 471eed08… |
 | 120 (chosen, in `configs/rag.yaml`) | 1.000      | 0.937 | 0.929        | 464cda41… |
 | 240                                 | 0.952      | 0.837 | 0.905        | e90090c9… |
+
+LLM baseline (smoke-test, 20 comments, same sample as rule and champion): rule PR-AUC 0.300, champion 0.833, LLM zero-shot (qwen3.8-27b) 0.333.
+Run ids: LLM `bc311615643f45dba916e9c094d050a4`. The sample is too small for a ranking; see README caveat.
 
 ### 7.3
 
