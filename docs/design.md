@@ -314,12 +314,14 @@ Cloud provider chosen for the estimate: AWS
   - Batch for the daily data load, nightly re-scoring and monitoring reports, because these are not time-critical and are cheaper and simpler to run as jobs.
 - Features are cheap to compute; only one feature (publication_toxic_rate_7d) is read from the online store.
 
-Inference: hosted API (free tier), model `qwen3.8-27b`, no self-hosting (the local vLLM image could not be built on a laptop with limited
-disk and memory). Measured over 20 calls of the retrieval classifier: p50 0.21 s, p95 4.21 s, first call 0.67 s, ~508 input and ~13 output
-tokens per call, cost 0 USD on the free tier; throughput is limited by the provider's per-minute and per-day quotas, which also caps the
-evaluation sample at 20 comments. Trade-off: the API costs no money here and needs no GPU, but sends comments (a public dataset) to a
-third party, has no SLA, and a quota that decides how large an evaluation can be; a self-hosted 0.5-1.5B model would keep data local at
-the price of weaker quality and ~7 GB of memory. Chosen: API; accepted cost: quota limits and dependence on the provider.
+Inference: hosted API (free tier), model `qwen3.8-27b`; judge on a separate provider/model. Self-hosting was rejected (the CPU vLLM image
+could not be built on the development laptop: disk and memory). Measured per request: classifier ≈ 178 input / 12 output tokens
+(zero-shot) or ≈ 508 / 13 (with retrieval); RAG answer ≈ 446 / 45; judge ≈ 190 / 7. Cost 0 USD on the free tier. Latency of the answer
+LLM over 21 calls: p50 0.35 s, p95 31.02 s, first (cold) call 0.98 s; classifier p50 0.15-0.21 s. The budget tolerates a median under 1 s,
+but not the tail: at least two calls took over 31 s (cause not determined), which would break an interactive SLA and needs a timeout
+and retry in Lab 4. Trade-off: the API costs no money and needs no GPU, but sends comments (public dataset) to a third party, has no
+SLA, and its quotas cap the evaluation size; local inference would keep data on the machine at the price of a weaker 0.5-1.5B model
+and ~7 GB of memory. Chosen: API; accepted cost: quota limits, tail latency and provider dependence.
 
 ### 6.4 Security
 

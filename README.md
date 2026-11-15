@@ -106,6 +106,9 @@ The retrieval variant scored lower than zero-shot (PR-AUC 0.15 vs 0.33) on these
 not meaningful; a plausible cause worth testing on a larger sample is that guideline chunks retrieved for an arbitrary comment are only
 loosely related to it and add noise to the prompt.
 
+Chosen setting (chunk 120, k=3): hit rate@1 = 0.90, @3 = 1.00, @5 = 1.00, MRR = 0.94, answer score = 0.93,
+citation_not_retrieved_rate = 0.00 (no answer cited a document the retriever did not return), judge parse failures 0/21.
+
 ### Scorecard (Lab 3)
 
 | Property                  | Evidence a reviewer checks                                                                    | Added in |
