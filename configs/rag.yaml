@@ -41,5 +41,5 @@ prompts:
 
 eval:
   questions: eval/questions.jsonl
-  classify_n: 600        # скільки коментарів з validation оцінює LLM
+  classify_n: 20        # скільки коментарів з validation оцінює LLM
   seed: 42
